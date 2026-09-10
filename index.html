@@ -45,7 +45,7 @@ textarea{width:100%;min-height:145px;border:1px solid var(--line);border-radius:
 .small{font-size:11px;color:var(--sub)}
 footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:9px 14px calc(9px + env(safe-area-inset-bottom));font-size:11px;color:#555;text-align:center}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs" type="module"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -161,21 +161,31 @@ function getLane(date,type,part,name){
  return null;
 }
 
-const ORDERS_KEY="ske37-imported-orders-v2";
-const PROGRESS_KEY="ske37-progress-v2";
+const ORDERS_KEY="ske37-imported-orders-v4";
+const PROGRESS_KEY="ske37-progress-v4";
 let orders=JSON.parse(localStorage.getItem(ORDERS_KEY)||"{}");
 let progress=JSON.parse(localStorage.getItem(PROGRESS_KEY)||"{}");
 let current="9/12",onlyRemaining=false;
 
 function normalizeType(s){return s.includes("握手")?"握手":s.includes("トーク")?"トーク":s}
+function normalizeMemberName(name){
+ const aliases={"桑原椿":"桒原椿"};
+ return aliases[name]||name;
+}
 function parseChunk(chunk){
- const order=(chunk.match(/■?\s*注文番号\s*[:：]?\s*(\d+)/)||[])[1]||null;
- const compact=chunk.replace(/\u3000/g," ").replace(/\s+/g," ");
+ const noSpace=chunk.replace(/\u3000/g,"").replace(/\s+/g,"");
+ const order=(noSpace.match(/■?注文番号[:：]?(\d+)/)||[])[1]||null;
  const items=[];
- const re=/商品名\s*[:：]\s*(\d{1,2}\/\d{1,2})\s*幕張\s*\(\s*(\d+)\s*部\s*\)\s*(.+?)「ため息未来」\s*\/\s*現地で\s*(握手会|トーク会)\s*参加券(?:(?!商品名).){0,500}?個数\s*[:：]\s*(\d+)/g;
+ const re=/商品名[:：](\d{1,2}\/\d{1,2})幕張\((\d+)部\)(.+?)「ため息未来」\/現地で(握手会|トーク会)参加券(?::1枚)?(?:(?!商品名).){0,500}?個数[:：](\d+)/g;
  let m;
- while((m=re.exec(compact))!==null){
-   items.push({date:m[1],part:+m[2],name:m[3].trim(),type:normalizeType(m[4]),count:+m[5]});
+ while((m=re.exec(noSpace))!==null){
+   items.push({
+     date:m[1],
+     part:+m[2],
+     name:normalizeMemberName(m[3]),
+     type:normalizeType(m[4]),
+     count:+m[5]
+   });
  }
  return {order,items};
 }
@@ -224,27 +234,36 @@ async function importPdf(file){
  const status=document.getElementById("pdfStatus");
  if(!file)return;
  if(file.type && file.type!=="application/pdf" && !file.name.toLowerCase().endsWith(".pdf")){
-   status.className="result err"; status.textContent="PDFファイルを選択してください。"; return;
+   status.className="result err";
+   status.textContent="PDFファイルを選択してください。";
+   return;
  }
- status.className="result warn"; status.textContent="PDFを解析中…";
+ status.className="result warn";
+ status.textContent="PDFを解析中…";
  try{
-   const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs");
-   pdfjs.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+   if(!window.pdfjsLib) throw new Error("PDF.js が読み込めませんでした");
+   pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
    const bytes=new Uint8Array(await file.arrayBuffer());
-   const pdf=await pdfjs.getDocument({data:bytes}).promise;
+   const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
    let text="";
    for(let p=1;p<=pdf.numPages;p++){
      const page=await pdf.getPage(p);
-     const content=await page.getTextContent();
-     text += "\n" + content.items.map(x=>x.str).join(" ");
+     const content=await page.getTextContent({normalizeWhitespace:true});
+     text += "\n" + content.items.map(x=>x.str||"").join("\n");
    }
+   const parsedCount=(text.replace(/\u3000/g,"").replace(/\s+/g,"").match(/商品名[:：]/g)||[]).length;
    const ok=await importParsedText(text,"PDF");
-   status.className="result "+(ok?"ok":"err");
-   status.textContent=ok?`PDF取込完了：${file.name}`:"PDF内の対象券を読み取れませんでした。";
+   if(ok){
+     status.className="result ok";
+     status.textContent=`PDF取込完了：${file.name}（商品欄 ${parsedCount}件を検出）`;
+   }else{
+     status.className="result err";
+     status.textContent=`PDF内の商品欄は ${parsedCount}件検出しましたが、9/12・9/13幕張の券を抽出できませんでした。`;
+   }
  }catch(e){
    console.error(e);
    status.className="result err";
-   status.textContent="PDFの読み込みに失敗しました。別のPDFで試すか、下のテキスト貼り付けを使ってください。";
+   status.textContent="PDFの解析に失敗しました。Safariを再読み込みして再度試すか、下のテキスト貼り付けを使ってください。";
  }finally{
    document.getElementById("pdfFile").value="";
  }
