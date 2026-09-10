@@ -18,6 +18,7 @@ h1{font-size:22px;margin:0 0 3px}.sub{color:var(--sub);font-size:12px}
 .importTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .importTitle{font-size:16px;font-weight:900}.privacy{font-size:11px;color:var(--green);font-weight:800}
 .help{font-size:12px;color:var(--sub);line-height:1.55;margin:6px 0 10px}
+.pdfPick{display:block;border:1px dashed #aaa;border-radius:12px;padding:13px;margin:10px 0;background:#fafafa;text-align:center;font-weight:700;cursor:pointer}.pdfPick input{display:none}.pdfNote{font-size:11px;color:#666;margin-top:5px}
 textarea{width:100%;min-height:145px;border:1px solid var(--line);border-radius:12px;padding:12px;resize:vertical;background:#fafafa;font-size:13px}
 .importActions{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .primary,.btn{border:0;border-radius:11px;padding:10px 13px;font-weight:800}
@@ -44,6 +45,7 @@ textarea{width:100%;min-height:145px;border:1px solid var(--line);border-radius:
 .small{font-size:11px;color:var(--sub)}
 footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:9px 14px calc(9px + env(safe-area-inset-bottom));font-size:11px;color:#555;text-align:center}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs" type="module"></script>
 </head>
 <body>
 <div class="wrap">
@@ -54,10 +56,15 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);b
 
 <div class="importCard">
   <div class="importTop"><div class="importTitle">📩 購入メールを取り込む</div><div class="privacy">端末内だけで解析</div></div>
-  <div class="help">mu-moの「【ご注文内容確認】SKE48 劇場盤 販売サイト」メール本文をコピーして、そのまま貼り付けてください。商品名と個数を自動で読み取り、同じ券は合算します。注文番号が同じメールを再度取り込んでも二重加算しません。</div>
-  <textarea id="mailText" placeholder="ここに「ご注文内容確認」メール本文を貼り付け"></textarea>
+  <div class="help">① Gmailの注文メールをPDF保存して選ぶ、または ② メール本文をコピーして貼り付け。どちらでも商品名・個数を自動で読み取ります。PDFやメール全文そのものは保存せず、解析した参加券情報だけをこの端末に保存します。</div>
+  <label class="pdfPick">📄 注文メールPDFを選択
+    <input id="pdfFile" type="file" accept="application/pdf,.pdf">
+    <div class="pdfNote">複数の注文がある場合はPDFを1つずつ追加できます</div>
+  </label>
+  <div id="pdfStatus" class="result"></div>
+  <textarea id="mailText" placeholder="または、ここに「ご注文内容確認」メール本文を貼り付け"></textarea>
   <div class="importActions">
-    <button class="primary" id="importBtn">メールから取り込む</button>
+    <button class="primary" id="importBtn">テキストから取り込む</button>
     <button class="btn" id="clearText">貼り付け欄を空にする</button>
     <button class="btn" id="clearAll">登録データを全削除</button>
   </div>
@@ -162,20 +169,13 @@ let current="9/12",onlyRemaining=false;
 
 function normalizeType(s){return s.includes("握手")?"握手":s.includes("トーク")?"トーク":s}
 function parseChunk(chunk){
- const order=(chunk.match(/■注文番号\s*[\r\n]*\s*(\d+)/)||[])[1]||null;
- const lines=chunk.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ const order=(chunk.match(/■?\s*注文番号\s*[:：]?\s*(\d+)/)||[])[1]||null;
+ const compact=chunk.replace(/\u3000/g," ").replace(/\s+/g," ");
  const items=[];
- for(let i=0;i<lines.length;i++){
-   if(!/^商品名[:：]/.test(lines[i])) continue;
-   const line=lines[i].replace(/^商品名[:：]\s*/,"");
-   const m=line.match(/(\d{1,2}\/\d{1,2})\s*幕張\s*\((\d+)部\)\s*(.+?)「ため息未来」\/現地で(握手会|トーク会)参加券/);
-   if(!m) continue;
-   let count=null;
-   for(let j=i+1;j<Math.min(lines.length,i+6);j++){
-     const cm=lines[j].match(/^個数[:：]\s*(\d+)/);
-     if(cm){count=+cm[1];break}
-   }
-   if(count) items.push({date:m[1],part:+m[2],name:m[3].trim(),type:normalizeType(m[4]),count});
+ const re=/商品名\s*[:：]\s*(\d{1,2}\/\d{1,2})\s*幕張\s*\(\s*(\d+)\s*部\s*\)\s*(.+?)「ため息未来」\s*\/\s*現地で\s*(握手会|トーク会)\s*参加券(?:(?!商品名).){0,500}?個数\s*[:：]\s*(\d+)/g;
+ let m;
+ while((m=re.exec(compact))!==null){
+   items.push({date:m[1],part:+m[2],name:m[3].trim(),type:normalizeType(m[4]),count:+m[5]});
  }
  return {order,items};
 }
@@ -185,10 +185,16 @@ function splitMail(text){
  return marks.map((start,i)=>text.slice(start,marks[i+1]??text.length));
 }
 function simpleHash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)}
-function importMail(){
+async function importMail(){
  const text=document.getElementById("mailText").value.trim();
  const result=document.getElementById("result");
  if(!text){result.className="result err";result.textContent="メール本文を貼り付けてください。";return}
+ const ok=await importParsedText(text,"テキスト");
+ if(ok)document.getElementById("mailText").value="";
+}
+
+async function importParsedText(text, sourceLabel="テキスト"){
+ const result=document.getElementById("result");
  const chunks=splitMail(text);
  let imported=0, ignored=0, orderCount=0;
  for(const chunk of chunks){
@@ -203,14 +209,47 @@ function importMail(){
    orderCount++;
  }
  if(!orderCount){
-   result.className="result err";result.textContent="9/12・9/13幕張の対象商品を読み取れませんでした。「ご注文内容確認」メール本文を丸ごと貼ってください。";return
+   result.className="result err";
+   result.textContent=`${sourceLabel}から9/12・9/13幕張の対象商品を読み取れませんでした。注文内容が載っているPDF/本文か確認してください。`;
+   return false;
  }
  localStorage.setItem(ORDERS_KEY,JSON.stringify(orders));
  result.className="result "+(ignored?"warn":"ok");
  result.textContent=`取り込み完了：${orderCount}件の注文 / 対象券 ${imported}枚${ignored?`（他日程 ${ignored}商品は除外）`:""}`;
- document.getElementById("mailText").value="";
  render();
+ return true;
 }
+
+async function importPdf(file){
+ const status=document.getElementById("pdfStatus");
+ if(!file)return;
+ if(file.type && file.type!=="application/pdf" && !file.name.toLowerCase().endsWith(".pdf")){
+   status.className="result err"; status.textContent="PDFファイルを選択してください。"; return;
+ }
+ status.className="result warn"; status.textContent="PDFを解析中…";
+ try{
+   const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs");
+   pdfjs.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+   const bytes=new Uint8Array(await file.arrayBuffer());
+   const pdf=await pdfjs.getDocument({data:bytes}).promise;
+   let text="";
+   for(let p=1;p<=pdf.numPages;p++){
+     const page=await pdf.getPage(p);
+     const content=await page.getTextContent();
+     text += "\n" + content.items.map(x=>x.str).join(" ");
+   }
+   const ok=await importParsedText(text,"PDF");
+   status.className="result "+(ok?"ok":"err");
+   status.textContent=ok?`PDF取込完了：${file.name}`:"PDF内の対象券を読み取れませんでした。";
+ }catch(e){
+   console.error(e);
+   status.className="result err";
+   status.textContent="PDFの読み込みに失敗しました。別のPDFで試すか、下のテキスト貼り付けを使ってください。";
+ }finally{
+   document.getElementById("pdfFile").value="";
+ }
+}
+
 function allTickets(date){
  const map=new Map();
  Object.values(orders).flat().filter(x=>x.date===date).forEach(x=>{
@@ -230,7 +269,7 @@ function render(){
  const total=items.reduce((s,x)=>s+x.count,0),u=items.reduce((s,x)=>s+getUsed(current,x),0),completed=items.filter(x=>getUsed(current,x)===x.count).length;
  document.getElementById("total").textContent=total;document.getElementById("remaining").textContent=total-u;document.getElementById("doneParts").textContent=`${completed}/${items.length}`;
  document.getElementById("remainingOnly").textContent=onlyRemaining?"すべて表示":"残りだけ表示";
- if(!items.length){app.innerHTML='<div class="empty"><b>まだ参加券が登録されていません。</b><br>上の欄にmu-moの「ご注文内容確認」メールを貼り付けてください。</div>';return}
+ if(!items.length){app.innerHTML='<div class="empty"><b>まだ参加券が登録されていません。</b><br>上から注文メールPDFを選ぶか、mu-moの「ご注文内容確認」メール本文を貼り付けてください。</div>';return}
  [...new Set(items.map(x=>x.part))].forEach(part=>{
    const group=items.filter(x=>x.part===part).filter(x=>!onlyRemaining||getUsed(current,x)<x.count);
    if(!group.length)return;
@@ -248,6 +287,7 @@ function render(){
 }
 
 document.getElementById("importBtn").onclick=importMail;
+document.getElementById("pdfFile").onchange=e=>importPdf(e.target.files?.[0]);
 document.getElementById("clearText").onclick=()=>document.getElementById("mailText").value="";
 document.getElementById("clearAll").onclick=()=>{if(confirm("取り込んだ購入データと消化記録をすべて削除しますか？")){orders={};progress={};localStorage.removeItem(ORDERS_KEY);localStorage.removeItem(PROGRESS_KEY);render();}};
 document.getElementById("resetProgress").onclick=()=>{if(confirm(`${current}の消化記録をリセットしますか？`)){Object.keys(progress).filter(k=>k.startsWith(current+"|")).forEach(k=>delete progress[k]);localStorage.setItem(PROGRESS_KEY,JSON.stringify(progress));render();}};
