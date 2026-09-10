@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>SKE48 参加券管理</title>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--ink:#111;--sub:#6e6e73;--line:#e5e5ea;--blue:#0a84ff;--green:#16833c;--warn:#9a6700}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--ink)}
+button,textarea{font:inherit}.wrap{max-width:760px;margin:0 auto;padding:14px 14px 100px}
+header{position:sticky;top:0;z-index:5;background:rgba(245,245,247,.94);backdrop-filter:blur(14px);padding:10px 0}
+h1{font-size:22px;margin:0 0 3px}.sub{color:var(--sub);font-size:12px}
+.importCard{background:#fff;border-radius:18px;padding:14px;margin:10px 0 14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.importTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.importTitle{font-size:16px;font-weight:900}.privacy{font-size:11px;color:var(--green);font-weight:800}
+.help{font-size:12px;color:var(--sub);line-height:1.55;margin:6px 0 10px}
+.pdfPick{display:block;border:1px dashed #aaa;border-radius:12px;padding:13px;margin:10px 0;background:#fafafa;text-align:center;font-weight:700;cursor:pointer}.pdfPick input{display:none}.pdfNote{font-size:11px;color:#666;margin-top:5px}
+textarea{width:100%;min-height:145px;border:1px solid var(--line);border-radius:12px;padding:12px;resize:vertical;background:#fafafa;font-size:13px}
+.importActions{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.primary,.btn{border:0;border-radius:11px;padding:10px 13px;font-weight:800}
+.primary{background:#111;color:#fff}.btn{background:#efeff4;color:#222}
+.result{font-size:12px;margin-top:8px;padding:9px 10px;border-radius:10px;display:none}
+.result.ok{display:block;background:#eaf7ee;color:#176a34}.result.err{display:block;background:#fff0ef;color:#a12622}.result.warn{display:block;background:#fff7dd;color:#7a5600}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.tab{border:0;border-radius:12px;padding:12px;font-weight:900;background:#e9e9ed;color:#333}
+.tab.active{background:#111;color:#fff}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.stat{background:#fff;border-radius:14px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--sub)}
+.controls{display:flex;gap:8px;margin:10px 0 14px;flex-wrap:wrap}
+.section{margin:16px 0 20px}.partHead{display:flex;align-items:end;justify-content:space-between;margin:0 2px 8px}
+.partTitle{font-size:20px;font-weight:900}.time{font-size:12px;color:var(--sub);text-align:right}
+.ticket{background:#fff;border-radius:16px;padding:14px;margin:8px 0;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.name{font-size:18px;font-weight:900;flex:1;min-width:135px}
+.badge{font-size:11px;font-weight:900;padding:5px 7px;border-radius:999px}.talk{background:#e8f1ff}.hand{background:#fff0e7}
+.lane{font-size:12px;font-weight:900;color:#444}.lane.missing{color:var(--warn)}
+.counter{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+.countText{font-size:14px}.countText strong{font-size:20px}.stepper{display:flex;align-items:center;gap:6px}
+.step{width:38px;height:38px;border:0;border-radius:10px;background:#efeff4;font-size:22px;font-weight:900}.used{min-width:28px;text-align:center;font-weight:900}
+.done{opacity:.45}.done .name{text-decoration:line-through}.empty{background:#fff;border-radius:16px;padding:35px 18px;text-align:center;color:var(--sub);line-height:1.7}
+.small{font-size:11px;color:var(--sub)}
+footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:9px 14px calc(9px + env(safe-area-inset-bottom));font-size:11px;color:#555;text-align:center}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>SKE48「ため息未来」幕張</h1>
+<div class="sub">9/12・9/13 握手会 / トーク会 参加券管理</div>
+</header>
+
+<div class="importCard">
+  <div class="importTop"><div class="importTitle">📩 購入メールを取り込む</div><div class="privacy">端末内だけで解析</div></div>
+  <div class="help">① Gmailの注文メールをPDF保存して選ぶ、または ② メール本文をコピーして貼り付け。どちらでも商品名・個数を自動で読み取ります。PDFやメール全文そのものは保存せず、解析した参加券情報だけをこの端末に保存します。</div>
+  <label class="pdfPick">📄 注文メールPDFを選択
+    <input id="pdfFile" type="file" accept="application/pdf,.pdf">
+    <div class="pdfNote">複数の注文がある場合はPDFを1つずつ追加できます</div>
+  </label>
+  <div id="pdfStatus" class="result"></div>
+  <textarea id="mailText" placeholder="または、ここに「ご注文内容確認」メール本文を貼り付け"></textarea>
+  <div class="importActions">
+    <button class="primary" id="importBtn">テキストから取り込む</button>
+    <button class="btn" id="clearText">貼り付け欄を空にする</button>
+    <button class="btn" id="clearAll">登録データを全削除</button>
+  </div>
+  <div id="result" class="result"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-date="9/12">9/12（土）</button>
+  <button class="tab" data-date="9/13">9/13（日）</button>
+</div>
+
+<div class="summary">
+  <div class="stat"><b id="total">0</b><span>所持枚数</span></div>
+  <div class="stat"><b id="remaining">0</b><span>残り枚数</span></div>
+  <div class="stat"><b id="doneParts">0</b><span>完了枠</span></div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="remainingOnly">残りだけ表示</button>
+  <button class="btn" id="resetProgress">この日の消化記録をリセット</button>
+</div>
+
+<div id="app"></div>
+</div>
+<footer>購入メール本文はサーバーへ送信せず、このブラウザ内で解析・保存します。</footer>
+
+<script>
+const times={1:["11:00〜12:00","11:40"],2:["12:00〜13:00","12:40"],3:["13:00〜14:00","13:40"],4:["14:00〜15:00","14:40"],5:["15:00〜16:00","15:40"],6:["16:00〜17:00","16:40"],7:["17:00〜18:00","17:40"],8:["18:00〜19:00","18:40"],9:["19:00〜20:00","19:40"]};
+
+const laneRows={
+"9/12":{
+"トーク":{
+1:[null,"倉島杏実","南澤恋々",null,null,"近藤海琴","倉島杏実","井上瑠夏","井上瑠夏"],
+2:["鎌田菜月","鎌田菜月","青木莉樺","桒原椿","佐藤佳穂","佐藤佳穂","山村さくら","青木莉樺","山村さくら"],
+3:["松本慈子","井田玲音名","井田玲音名","長谷川雅","長谷川雅","松本慈子","中坂美祐","中坂美祐",null],
+4:["野村実代","野村実代","太田彩夏","伊藤実希","原優寧","伊藤実希","原優寧","太田彩夏","浅井裕華"],
+5:["河村優愛","伊藤虹々美","河村優愛","森本くるみ","森本くるみ","大村杏","桜井愛莉咲","伊藤虹々美","大村杏"],
+6:[null,"中尾楓華","池田有沙","坂本真凛","坂本真凛","桜井愛莉咲","聖遥花","聖遥花",null],
+7:["鈴木愛菜","宮本倫花","北川愛乃","石黒友月","石黒友月","北川愛乃","佐々木希美","倉本羽菜",null],
+8:["荒野姫楓","立花菖","荒野姫楓","浅井裕華","篠原京香","雲井紗菜","篠原京香","奥野心羽","雲井紗菜"],
+9:["太田愛恵","久保田怜","西井美桜","西井美桜","相川暖花","相川暖花","入内嶋涼","竹下茉莉花","田村真悠"],
+10:["横井志穂","飯田ゆら","入内嶋涼",null,"松川みゆ","赤堀君江","赤堀君江","鈴木恋奈","鈴木恋奈"],
+11:[null,"桒原椿","松川みゆ","杉本りいな","杉本りいな","川村昇子","川村昇子","矢島凪",null]
+},
+"握手":{
+1:["長谷川雅","長谷川雅",null,"入内嶋涼","入内嶋涼","坂本真凛",null,null,"佐々木希美"],
+2:["南澤恋々","南澤恋々","野村実代","飯田ゆら","野村実代","野村実代","石黒友月","坂本真凛","坂本真凛"],
+3:["森本くるみ","森本くるみ","鎌田菜月","佐藤佳穂","鎌田菜月","鎌田菜月","森本くるみ","佐藤佳穂","佐藤佳穂"],
+4:["倉島杏実","横井志穂","倉島杏実","青木莉樺","倉島杏実","青木莉樺","青木莉樺","近藤海琴","近藤海琴"],
+5:["宮本倫花","松本慈子","松本慈子","井田玲音名","松本慈子","井田玲音名","伊藤実希","伊藤実希","竹下茉莉花"],
+6:["杉本りいな","杉本りいな","伊藤実希","川村昇子","中坂美祐","矢島凪","松川みゆ","大村杏","相川暖花"],
+7:["石黒友月","石黒友月","井上瑠夏","井上瑠夏","浅井裕華","井上瑠夏","浅井裕華","浅井裕華","中坂美祐"],
+8:["立花菖","西井美桜","伊藤虹々美","原優寧","伊藤虹々美","伊藤虹々美","相川暖花","原優寧","原優寧"],
+9:["久保田怜","河村優愛","大村杏","大村杏","山村さくら","西井美桜","西井美桜","山村さくら","奥野心羽"],
+10:["入内嶋涼","鈴木愛菜","鈴木愛菜","太田彩夏","北川愛乃","太田彩夏","太田彩夏","北川愛乃","北川愛乃"],
+11:["篠原京香","篠原京香","篠原京香","荒野姫楓","河村優愛","荒野姫楓","河村優愛","荒野姫楓","桜井愛莉咲"],
+12:["中尾楓華","太田愛恵","相川暖花","久保田怜","赤堀君江","奥野心羽","倉本羽菜","雲井紗菜","倉本羽菜"],
+13:["桒原椿","池田有沙","赤堀君江","鈴木恋奈","鈴木恋奈","松川みゆ","鈴木恋奈","田村真悠","聖遥花"]
+}},
+"9/13":{
+"トーク":{
+1:[null,"倉島杏実","南澤恋々","熊崎晴香","熊崎晴香","近藤海琴","倉島杏実","井上瑠夏","井上瑠夏"],
+2:["鎌田菜月","鎌田菜月","青木莉樺","桒原椿","佐藤佳穂","佐藤佳穂","山村さくら","青木莉樺","山村さくら"],
+3:["松本慈子","井田玲音名","井田玲音名","長谷川雅","長谷川雅","松本慈子","中坂美祐","中坂美祐",null],
+4:["野村実代","野村実代","太田彩夏","伊藤実希","原優寧","伊藤実希","原優寧","太田彩夏","浅井裕華"],
+5:["河村優愛","伊藤虹々美","河村優愛","森本くるみ","森本くるみ","大村杏","桜井愛莉咲","伊藤虹々美","大村杏"],
+6:[null,"中尾楓華","池田有沙","坂本真凛","坂本真凛","桜井愛莉咲","聖遥花","聖遥花",null],
+7:[null,"宮本倫花","北川愛乃","石黒友月","石黒友月","北川愛乃","佐々木希美","倉本羽菜",null],
+8:["荒野姫楓","立花菖","荒野姫楓","浅井裕華","篠原京香","雲井紗菜","篠原京香","奥野心羽","雲井紗菜"],
+9:["太田愛恵","久保田怜","西井美桜","西井美桜",null,null,"入内嶋涼","竹下茉莉花","田村真悠"],
+10:["横井志穂","飯田ゆら","入内嶋涼",null,null,"赤堀君江","赤堀君江","鈴木恋奈","鈴木恋奈"],
+11:[null,"桒原椿",null,"杉本りいな","杉本りいな","川村昇子","川村昇子","矢島凪",null]
+},
+"握手":{
+1:["長谷川雅","長谷川雅","熊崎晴香","入内嶋涼","入内嶋涼","坂本真凛","熊崎晴香","熊崎晴香","佐々木希美"],
+2:["南澤恋々","南澤恋々","野村実代","飯田ゆら","野村実代","野村実代","石黒友月","坂本真凛","坂本真凛"],
+3:["森本くるみ","森本くるみ","鎌田菜月","佐藤佳穂","鎌田菜月","鎌田菜月","森本くるみ","佐藤佳穂","佐藤佳穂"],
+4:["倉島杏実","横井志穂","倉島杏実","青木莉樺","倉島杏実","青木莉樺","青木莉樺","近藤海琴","近藤海琴"],
+5:["宮本倫花","松本慈子","松本慈子","井田玲音名","松本慈子","井田玲音名","伊藤実希","伊藤実希","竹下茉莉花"],
+6:["杉本りいな","杉本りいな","伊藤実希","川村昇子","中坂美祐","矢島凪",null,"大村杏",null],
+7:["石黒友月","石黒友月","井上瑠夏","井上瑠夏","浅井裕華","井上瑠夏","浅井裕華","浅井裕華","中坂美祐"],
+8:["立花菖","西井美桜","伊藤虹々美","原優寧","伊藤虹々美","伊藤虹々美",null,"原優寧","原優寧"],
+9:["久保田怜","河村優愛","大村杏","大村杏","山村さくら","西井美桜","西井美桜","山村さくら","奥野心羽"],
+10:["入内嶋涼",null,null,"太田彩夏","北川愛乃","太田彩夏","太田彩夏","北川愛乃","北川愛乃"],
+11:["篠原京香","篠原京香","篠原京香","荒野姫楓","河村優愛","荒野姫楓","河村優愛","荒野姫楓","桜井愛莉咲"],
+12:["中尾楓華","太田愛恵",null,"久保田怜","赤堀君江","奥野心羽","倉本羽菜","雲井紗菜","倉本羽菜"],
+13:["桒原椿","池田有沙","赤堀君江","鈴木恋奈","鈴木恋奈",null,"鈴木恋奈","田村真悠","聖遥花"]
+}}
+};
+
+function getLane(date,type,part,name){
+ const rows=laneRows[date]?.[type]||{};
+ for(const [lane,arr] of Object.entries(rows)) if(arr[part-1]===name) return +lane;
+ return null;
+}
+
+const ORDERS_KEY="ske37-imported-orders-v4";
+const PROGRESS_KEY="ske37-progress-v4";
+let orders=JSON.parse(localStorage.getItem(ORDERS_KEY)||"{}");
+let progress=JSON.parse(localStorage.getItem(PROGRESS_KEY)||"{}");
+let current="9/12",onlyRemaining=false;
+
+function normalizeType(s){return s.includes("握手")?"握手":s.includes("トーク")?"トーク":s}
+function normalizeMemberName(name){
+ const aliases={"桑原椿":"桒原椿"};
+ return aliases[name]||name;
+}
+function parseChunk(chunk){
+ const noSpace=chunk.replace(/\u3000/g,"").replace(/\s+/g,"");
+ const order=(noSpace.match(/■?注文番号[:：]?(\d+)/)||[])[1]||null;
+ const items=[];
+ const re=/商品名[:：](\d{1,2}\/\d{1,2})幕張\((\d+)部\)(.+?)「ため息未来」\/現地で(握手会|トーク会)参加券(?::1枚)?(?:(?!商品名).){0,500}?個数[:：](\d+)/g;
+ let m;
+ while((m=re.exec(noSpace))!==null){
+   items.push({
+     date:m[1],
+     part:+m[2],
+     name:normalizeMemberName(m[3]),
+     type:normalizeType(m[4]),
+     count:+m[5]
+   });
+ }
+ return {order,items};
+}
+function splitMail(text){
+ const marks=[...text.matchAll(/■注文番号/g)].map(m=>m.index);
+ if(marks.length<=1)return [text];
+ return marks.map((start,i)=>text.slice(start,marks[i+1]??text.length));
+}
+function simpleHash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)}
+async function importMail(){
+ const text=document.getElementById("mailText").value.trim();
+ const result=document.getElementById("result");
+ if(!text){result.className="result err";result.textContent="メール本文を貼り付けてください。";return}
+ const ok=await importParsedText(text,"テキスト");
+ if(ok)document.getElementById("mailText").value="";
+}
+
+async function importParsedText(text, sourceLabel="テキスト"){
+ const result=document.getElementById("result");
+ const chunks=splitMail(text);
+ let imported=0, ignored=0, orderCount=0;
+ for(const chunk of chunks){
+   const parsed=parseChunk(chunk);
+   if(!parsed.items.length)continue;
+   const supported=parsed.items.filter(x=>x.date==="9/12"||x.date==="9/13");
+   ignored+=parsed.items.length-supported.length;
+   if(!supported.length)continue;
+   const id=parsed.order||("mail-"+simpleHash(chunk));
+   orders[id]=supported;
+   imported+=supported.reduce((s,x)=>s+x.count,0);
+   orderCount++;
+ }
+ if(!orderCount){
+   result.className="result err";
+   result.textContent=`${sourceLabel}から9/12・9/13幕張の対象商品を読み取れませんでした。注文内容が載っているPDF/本文か確認してください。`;
+   return false;
+ }
+ localStorage.setItem(ORDERS_KEY,JSON.stringify(orders));
+ result.className="result "+(ignored?"warn":"ok");
+ result.textContent=`取り込み完了：${orderCount}件の注文 / 対象券 ${imported}枚${ignored?`（他日程 ${ignored}商品は除外）`:""}`;
+ render();
+ return true;
+}
+
+async function importPdf(file){
+ const status=document.getElementById("pdfStatus");
+ if(!file)return;
+ if(file.type && file.type!=="application/pdf" && !file.name.toLowerCase().endsWith(".pdf")){
+   status.className="result err";
+   status.textContent="PDFファイルを選択してください。";
+   return;
+ }
+ status.className="result warn";
+ status.textContent="PDFを解析中…";
+ try{
+   if(!window.pdfjsLib) throw new Error("PDF.js が読み込めませんでした");
+   pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+   const bytes=new Uint8Array(await file.arrayBuffer());
+   const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+   let text="";
+   for(let p=1;p<=pdf.numPages;p++){
+     const page=await pdf.getPage(p);
+     const content=await page.getTextContent({normalizeWhitespace:true});
+     text += "\n" + content.items.map(x=>x.str||"").join("\n");
+   }
+   const parsedCount=(text.replace(/\u3000/g,"").replace(/\s+/g,"").match(/商品名[:：]/g)||[]).length;
+   const ok=await importParsedText(text,"PDF");
+   if(ok){
+     status.className="result ok";
+     status.textContent=`PDF取込完了：${file.name}（商品欄 ${parsedCount}件を検出）`;
+   }else{
+     status.className="result err";
+     status.textContent=`PDF内の商品欄は ${parsedCount}件検出しましたが、9/12・9/13幕張の券を抽出できませんでした。`;
+   }
+ }catch(e){
+   console.error(e);
+   status.className="result err";
+   status.textContent="PDFの解析に失敗しました。Safariを再読み込みして再度試すか、下のテキスト貼り付けを使ってください。";
+ }finally{
+   document.getElementById("pdfFile").value="";
+ }
+}
+
+function allTickets(date){
+ const map=new Map();
+ Object.values(orders).flat().filter(x=>x.date===date).forEach(x=>{
+   const k=[x.part,x.name,x.type].join("|");
+   const cur=map.get(k)||{...x,count:0};
+   cur.count+=x.count; map.set(k,cur);
+ });
+ return [...map.values()].sort((a,b)=>a.part-b.part||a.type.localeCompare(b.type,"ja")||a.name.localeCompare(b.name,"ja"));
+}
+function pkey(date,x){return [date,x.part,x.name,x.type].join("|")}
+function getUsed(date,x){return Math.max(0,Math.min(x.count,+(progress[pkey(date,x)]||0)))}
+function setUsed(date,x,n){progress[pkey(date,x)]=Math.max(0,Math.min(x.count,n));localStorage.setItem(PROGRESS_KEY,JSON.stringify(progress));render()}
+
+function render(){
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.date===current));
+ const items=allTickets(current),app=document.getElementById("app");app.innerHTML="";
+ const total=items.reduce((s,x)=>s+x.count,0),u=items.reduce((s,x)=>s+getUsed(current,x),0),completed=items.filter(x=>getUsed(current,x)===x.count).length;
+ document.getElementById("total").textContent=total;document.getElementById("remaining").textContent=total-u;document.getElementById("doneParts").textContent=`${completed}/${items.length}`;
+ document.getElementById("remainingOnly").textContent=onlyRemaining?"すべて表示":"残りだけ表示";
+ if(!items.length){app.innerHTML='<div class="empty"><b>まだ参加券が登録されていません。</b><br>上から注文メールPDFを選ぶか、mu-moの「ご注文内容確認」メール本文を貼り付けてください。</div>';return}
+ [...new Set(items.map(x=>x.part))].forEach(part=>{
+   const group=items.filter(x=>x.part===part).filter(x=>!onlyRemaining||getUsed(current,x)<x.count);
+   if(!group.length)return;
+   const sec=document.createElement("section");sec.className="section";
+   sec.innerHTML=`<div class="partHead"><div class="partTitle">${part}部</div><div class="time">${times[part][0]}<br>レーン締切 ${times[part][1]}</div></div>`;
+   group.forEach(x=>{
+     const u=getUsed(current,x),done=u===x.count,lane=getLane(current,x.type,x.part,x.name);
+     const el=document.createElement("div");el.className=`ticket ${done?"done":""}`;
+     el.innerHTML=`<div class="row"><div class="name">${x.name}</div><span class="badge ${x.type==="握手"?"hand":"talk"}">${x.type}</span><span class="lane ${lane?"":"missing"}">${lane?`レーン ${lane}`:"レーン要確認"}</span></div>
+     <div class="counter"><div class="countText">所持 <strong>${x.count}</strong>枚　残り <strong>${x.count-u}</strong>枚</div><div class="stepper"><button class="step minus">−</button><span class="used">${u}</span><button class="step plus">＋</button></div></div>`;
+     el.querySelector(".minus").onclick=()=>setUsed(current,x,u-1);el.querySelector(".plus").onclick=()=>setUsed(current,x,u+1);sec.appendChild(el);
+   });app.appendChild(sec);
+ });
+ if(!app.children.length)app.innerHTML='<div class="empty">この日の券はすべて消化済み！</div>';
+}
+
+document.getElementById("importBtn").onclick=importMail;
+document.getElementById("pdfFile").onchange=e=>importPdf(e.target.files?.[0]);
+document.getElementById("clearText").onclick=()=>document.getElementById("mailText").value="";
+document.getElementById("clearAll").onclick=()=>{if(confirm("取り込んだ購入データと消化記録をすべて削除しますか？")){orders={};progress={};localStorage.removeItem(ORDERS_KEY);localStorage.removeItem(PROGRESS_KEY);render();}};
+document.getElementById("resetProgress").onclick=()=>{if(confirm(`${current}の消化記録をリセットしますか？`)){Object.keys(progress).filter(k=>k.startsWith(current+"|")).forEach(k=>delete progress[k]);localStorage.setItem(PROGRESS_KEY,JSON.stringify(progress));render();}};
+document.getElementById("remainingOnly").onclick=()=>{onlyRemaining=!onlyRemaining;render()};
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{current=b.dataset.date;render()});
+render();
+</script>
+</body>
+</html>
