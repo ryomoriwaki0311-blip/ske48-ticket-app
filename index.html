@@ -52,7 +52,7 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);b
 <div class="wrap">
 <header>
 <h1>SKE48「ため息未来」幕張</h1>
-<div class="sub">9/12・9/13 握手会 / トーク会 参加券管理</div>
+<div class="sub">9/12・9/13 握手会 / トーク会 参加券管理 <b>v8</b></div>
 </header>
 
 <div class="importCard">
@@ -60,7 +60,7 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);b
   <div class="help">① Gmailの注文メールをPDF保存して選ぶ、または ② メール本文をコピーして貼り付け。どちらでも商品名・個数を自動で読み取ります。iPhoneで保存したPDFは必要に応じて端末内OCRに自動切替します。PDFやメール全文そのものは保存しません。</div>
   <label class="pdfPick">📄 注文メールPDFを選択
     <input id="pdfFile" type="file" accept="application/pdf,.pdf" multiple>
-    <div class="pdfNote">複数のPDFをまとめて選択できます</div><div class="ocrNote">※ iPhone/Gmail PDFはOCRに10〜40秒ほどかかる場合があります</div>
+    <div class="pdfNote">複数のPDFをまとめて選択できます</div><div class="ocrNote">※ v8：まずPDFの日本語を直接抽出し、読めない場合だけOCRへ切り替えます</div>
   </label>
   <div id="pdfStatus" class="result"></div>
   <textarea id="mailText" placeholder="または、ここに「ご注文内容確認」メール本文を貼り付け"></textarea>
@@ -329,9 +329,15 @@ async function importPdf(file,opts={}){
    if(!window.pdfjsLib) throw new Error("PDF.js が読み込めませんでした");
    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
    const bytes=new Uint8Array(await file.arrayBuffer());
-   const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+   const pdf=await pdfjsLib.getDocument({
+     data:bytes,
+     cMapUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/",
+     cMapPacked:true,
+     standardFontDataUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/"
+   }).promise;
 
    let text=await extractPdfText(pdf);
+   setOcrDiagnostic("【PDF直接抽出】\n"+text,file.name);
    let parsed=splitMail(text).flatMap(c=>parseChunk(c).items);
    let usedOCR=false;
 
@@ -339,6 +345,7 @@ async function importPdf(file,opts={}){
       usedOCR=true;
       status.textContent="日本語テキストを直接読めないPDFです。端末内OCRに切り替えます…";
       text=await ocrPdf(pdf,status);
+      setOcrDiagnostic("【OCR結果】\n"+text,file.name+"（OCR）");
       parsed=splitMail(text).flatMap(c=>parseChunk(c).items);
    }
 
@@ -350,7 +357,11 @@ async function importPdf(file,opts={}){
      return true;
    }else{
      status.className="result err";
-     status.textContent="対象券を抽出できませんでした。下の「OCR診断 → OCR結果を表示」を押して、商品名付近がどう読まれているか確認してください。";
+     status.textContent="対象券を抽出できませんでした。OCR診断欄を自動で開きました。";
+     const box=document.getElementById("ocrDiag");
+     if(box) box.style.display="block";
+     const btn=document.getElementById("toggleDiag");
+     if(btn) btn.textContent="OCR結果を隠す";
      return false;
    }
  }catch(e){
