@@ -72,6 +72,16 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);b
   <div id="result" class="result"></div>
 </div>
 
+<div class="importCard" id="ocrDiagCard">
+  <div class="importTop"><div><div class="importTitle">🧪 OCR診断</div>
+  <div class="help">PDF読込時の「実際にiPhoneが読んだ文字」を確認できます。個人情報が含まれる場合があるので、共有するときは商品名付近だけでOKです。</div></div></div>
+  <div class="importActions">
+    <button class="btn" id="toggleDiag">OCR結果を表示</button>
+    <button class="btn" id="copyDiag">OCR結果をコピー</button>
+  </div>
+  <textarea id="ocrDiag" readonly style="display:none;min-height:240px" placeholder="PDFを読み込むとここに診断結果が入ります"></textarea>
+  <div class="result" id="diagInfo"></div>
+</div>
 <div class="tabs">
   <button class="tab active" data-date="9/12">9/12（土）</button>
   <button class="tab" data-date="9/13">9/13（日）</button>
@@ -162,7 +172,7 @@ function getLane(date,type,part,name){
  return null;
 }
 
-const ORDERS_KEY="ske37-imported-orders-v6";
+const ORDERS_KEY="ske37-imported-orders-v7";
 const PROGRESS_KEY="ske37-progress-v6";
 let orders=JSON.parse(localStorage.getItem(ORDERS_KEY)||"{}");
 let progress=JSON.parse(localStorage.getItem(PROGRESS_KEY)||"{}");
@@ -292,6 +302,19 @@ async function ocrPdf(pdf,status){
  return text;
 }
 
+let lastOcrDiagnostic="";
+function setOcrDiagnostic(text,fileName=""){
+ lastOcrDiagnostic=String(text||"");
+ const box=document.getElementById("ocrDiag"),info=document.getElementById("diagInfo");
+ if(box) box.value=lastOcrDiagnostic;
+ if(info){
+   const lines=lastOcrDiagnostic.split(/\r?\n/).filter(Boolean).length;
+   info.className="result "+(lastOcrDiagnostic?"ok":"warn");
+   info.textContent=lastOcrDiagnostic
+     ? `診断取得：${fileName||"PDF"} / ${lastOcrDiagnostic.length}文字・${lines}行`
+     : `診断データなし：${fileName||"PDF"}`;
+ }
+}
 async function importPdf(file,opts={}){
  const status=document.getElementById("pdfStatus");
  if(!file)return;
@@ -319,6 +342,7 @@ async function importPdf(file,opts={}){
       parsed=splitMail(text).flatMap(c=>parseChunk(c).items);
    }
 
+   setOcrDiagnostic(text,file.name+(usedOCR?"（OCR）":""));
    const ok=await importParsedText(text,usedOCR?"PDF（OCR）":"PDF");
    if(ok){
      status.className="result ok";
@@ -326,7 +350,7 @@ async function importPdf(file,opts={}){
      return true;
    }else{
      status.className="result err";
-     status.textContent="PDFを読み取りましたが、対象券を抽出できませんでした。下のテキスト貼り付けも利用できます。";
+     status.textContent="対象券を抽出できませんでした。下の「OCR診断 → OCR結果を表示」を押して、商品名付近がどう読まれているか確認してください。";
      return false;
    }
  }catch(e){
@@ -376,6 +400,24 @@ function render(){
 }
 
 document.getElementById("importBtn").onclick=importMail;
+document.getElementById("toggleDiag").onclick=()=>{
+ const box=document.getElementById("ocrDiag"),btn=document.getElementById("toggleDiag");
+ const show=box.style.display==="none";
+ box.style.display=show?"block":"none";
+ btn.textContent=show?"OCR結果を隠す":"OCR結果を表示";
+};
+document.getElementById("copyDiag").onclick=async()=>{
+ const info=document.getElementById("diagInfo");
+ if(!lastOcrDiagnostic){info.className="result warn";info.textContent="まだOCR診断データがありません。先にPDFを読み込んでください。";return;}
+ try{
+   await navigator.clipboard.writeText(lastOcrDiagnostic);
+   info.className="result ok";info.textContent="OCR診断結果をコピーしました。";
+ }catch(e){
+   const box=document.getElementById("ocrDiag");
+   box.style.display="block";box.focus();box.select();
+   info.className="result warn";info.textContent="自動コピーできなかったので、表示欄を選択しました。必要な部分だけコピーしてください。";
+ }
+};
 document.getElementById("pdfFile").onchange=async e=>{
  const files=[...(e.target.files||[])];
  if(!files.length)return;
